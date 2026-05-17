@@ -12,8 +12,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    open: true,
+    port: 5174, // ✅ porta que o KRATOS usa em window.open(http://localhost:5174/...)
+    open: false, // não abre automaticamente — é aberto pelo KRATOS
   },
   build: {
     target: 'es2022',

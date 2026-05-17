@@ -9,16 +9,19 @@ if (!root) {
   throw new Error('#app não encontrado no HTML')
 }
 
+// Lê o childId da URL (?childId=xxx) — passado pelo frontend principal
+const params = new URLSearchParams(window.location.search)
+const childId = params.get('childId') ?? undefined
+
 // Inicializar sistema de áudio
 const audioManager = AudioManager.getInstance()
 
-// Criar instância do jogo
-const app = new App()
+// Criar instância do jogo passando o childId
+const app = new App(childId)
 
 // Criar gerenciador de menu com callbacks
 const menuManager = new MenuManager({
   onStartGame: () => {
-    // Monta o jogo quando iniciar
     app.mount(root)
   },
   onShowLeaderboard: () => {
@@ -35,16 +38,10 @@ const menuManager = new MenuManager({
 // Montar menu principal
 menuManager.mount(root)
 
-// Auto-play música ao abrir o navegador
-// playMusic() engole erros de autoplay internamente (.catch),
-// então registramos listeners na primeira interação do usuário
-// incondicionalmente — é a única forma garantida nos browsers modernos.
 ;(async () => {
   await audioManager.initialize()
-  // Tenta tocar direto (funciona se o browser permitir autoplay)
   audioManager.playMusic('theme')
 
-  // Fallback: na primeira interação do usuário, garante que a música comece
   const ensureMusic = () => {
     audioManager.playMusic('theme')
     document.removeEventListener('click', ensureMusic)

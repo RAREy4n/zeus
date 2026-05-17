@@ -9,6 +9,7 @@ import { GameWorld } from '@game/world'
 import { LEVELS, getLevel } from '@game/levels'
 import type { LevelDefinition } from '@game/types'
 import { localRepo } from '@api/local-repo'
+import { salvarProgresso } from '@/services/api'
 import { CanvasRenderer } from './renderer'
 import { AudioManager } from '@/audio/audio-manager'
 
@@ -17,12 +18,13 @@ type AppPhase = 'idle' | 'running' | 'paused' | 'done' | 'error'
 interface AppState {
   currentLevelId: number
   phase: AppPhase
-  speed: number 
+  speed: number
   world: GameWorld | null
   interpreter: Interpreter | null
   renderer: CanvasRenderer | null
   lastStepTime: number
   highlightLine: number | null
+  startedAt: number // timestamp em ms para calcular tempo jogado
 }
 
 export class App {
@@ -38,8 +40,10 @@ export class App {
   private tickCounterEl!: HTMLDivElement
   private lastScopeHash = ''
   private audioManager: AudioManager
+  private childId: string | undefined // 👈 recebido do frontend principal via URL
 
-  constructor() {
+  constructor(childId?: string) {
+    this.childId = childId
     this.state = {
       currentLevelId: 0,
       phase: 'idle',
@@ -49,6 +53,7 @@ export class App {
       renderer: null,
       lastStepTime: 0,
       highlightLine: null,
+      startedAt: 0,
     }
     this.audioManager = AudioManager.getInstance()
   }
@@ -232,6 +237,7 @@ export class App {
     this.state.interpreter = new Interpreter(ast, this.state.world)
     this.state.phase = 'running'
     this.state.lastStepTime = performance.now()
+    this.state.startedAt = Date.now() // 👈 marca início para calcular tempo depois
     this.setStatus('running', 'Executando...')
   }
 
@@ -310,10 +316,24 @@ export class App {
       const level = getLevel(this.state.currentLevelId)!
       const winTicks = this.state.world.state.victoryAtTick || ticks
       const score = computeScore(level, winTicks, this.state.world)
+      const timeSpentSeconds = Math.round((Date.now() - this.state.startedAt) / 1000)
+
       this.appendLog(`✅ Nível completo em ${winTicks} ticks! Score: ${score}`)
       this.setStatus('done', `✅ Vitória! Score: ${score}`)
       this.markLevelCompleted(this.state.currentLevelId, score, winTicks)
       this.audioManager.playSfx('success')
+
+      // 👇 Salva progresso no backend se houver um jogador logado
+      if (this.childId) {
+        salvarProgresso(
+          this.childId,
+          'robo-pizzaiolo',
+          score,
+          timeSpentSeconds,
+        ).catch((err: unknown) => {
+          console.warn('Não foi possível salvar progresso no servidor:', err)
+        })
+      }
     } else {
       this.appendLog(`❌ Programa terminou mas o objetivo não foi atingido. Ticks: ${ticks}`)
       this.setStatus('done', 'Tente de novo')
@@ -358,31 +378,11 @@ export class App {
       enriched.push({ name: k, value: formatValue(v), kind: 'user' })
     }
     if (world) {
-      enriched.push({
-        name: 'jogador.posicao',
-        value: `${world.player.x},${world.player.y}`,
-        kind: 'world',
-      })
-      enriched.push({
-        name: 'jogador.olhando',
-        value: world.player.facing,
-        kind: 'world',
-      })
-      enriched.push({
-        name: 'jogador.segurando',
-        value: world.player.holding ?? 'nulo',
-        kind: 'world',
-      })
-      enriched.push({
-        name: 'pedidos.na_fila',
-        value: String(world.orderQueue.length),
-        kind: 'world',
-      })
-      enriched.push({
-        name: 'pizzas.entregues',
-        value: String(world.deliveredCount),
-        kind: 'world',
-      })
+      enriched.push({ name: 'jogador.posicao', value: `${world.player.x},${world.player.y}`, kind: 'world' })
+      enriched.push({ name: 'jogador.olhando', value: world.player.facing, kind: 'world' })
+      enriched.push({ name: 'jogador.segurando', value: world.player.holding ?? 'nulo', kind: 'world' })
+      enriched.push({ name: 'pedidos.na_fila', value: String(world.orderQueue.length), kind: 'world' })
+      enriched.push({ name: 'pizzas.entregues', value: String(world.deliveredCount), kind: 'world' })
     }
 
     const hash = enriched.map((v) => `${v.name}=${v.value}`).join('|')
@@ -395,16 +395,9 @@ export class App {
     }
     this.varsEl.innerHTML = `
       <table class="vars-table">
-        <thead>
-          <tr><th>Nome</th><th>Valor</th></tr>
-        </thead>
+        <thead><tr><th>Nome</th><th>Valor</th></tr></thead>
         <tbody>
-          ${enriched
-            .map(
-              (v) =>
-                `<tr class="var-${v.kind}"><td class="var-name">${escapeHtml(v.name)}</td><td class="var-value">${escapeHtml(v.value)}</td></tr>`
-            )
-            .join('')}
+          ${enriched.map((v) => `<tr class="var-${v.kind}"><td class="var-name">${escapeHtml(v.name)}</td><td class="var-value">${escapeHtml(v.value)}</td></tr>`).join('')}
         </tbody>
       </table>
     `
@@ -489,11 +482,10 @@ function formatValue(v: unknown): string {
   if (v === null || v === undefined) return 'nulo'
   if (typeof v === 'boolean') return v ? 'verdadeiro' : 'falso'
   if (typeof v === 'string') return `"${v}"`
-  if (typeof v === 'number') {
-    return Number.isInteger(v) ? String(v) : v.toFixed(2)
-  }
+  if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2)
   return String(v)
 }
+
 const TEMPLATE = `
 <div class="app">
   <header class="header">
