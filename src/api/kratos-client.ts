@@ -1,7 +1,7 @@
 
 const DEFAULT_BASE_URL =
-  (import.meta as ImportMeta & { env?: Record<string, string> }).env?.VITE_KRATOS_URL ??
-  'http://localhost:3000'
+  import.meta.env.VITE_API_URL ??
+  'http://localhost:3001'
 const GAME_ID = 'pizzaria-game'
 
 export interface SubmitRunPayload {
