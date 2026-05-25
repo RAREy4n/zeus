@@ -84,6 +84,12 @@ export class MenuManager {
       this.audioManager.playSfx('select')
       this.showSettings()
     })
+
+    // Volta para o KidQuest fechando a aba atual
+    const btnBack = document.getElementById('btn-menu-back-kidquest')
+    btnBack?.addEventListener('click', () => {
+      window.close()
+    })
   }
 
   private attachLeaderboardEvents(): void {
@@ -202,6 +208,11 @@ export class MenuManager {
             <button id="btn-menu-settings" class="menu-btn menu-btn-secondary">
               <span class="menu-btn-icon">⚙️</span>
               <span class="menu-btn-text">Configurações</span>
+            </button>
+
+            <button id="btn-menu-back-kidquest" class="menu-btn menu-btn-secondary" style="margin-top: 8px; opacity: 0.75;">
+              <span class="menu-btn-icon">🏠</span>
+              <span class="menu-btn-text">Voltar ao KidQuest</span>
             </button>
           </div>
 
