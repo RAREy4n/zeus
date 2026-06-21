@@ -23,6 +23,19 @@ export interface LeaderboardEntry {
   achievedAt: string
 }
 
+interface KratosLoginResponse {
+  success?: boolean
+  data?: {
+    token: string
+    user: {
+      id?: string
+      _id?: string
+    }
+  }
+  token?: string
+  userId?: string
+}
+
 export class KratosClient {
   private token: string | null = null
 
@@ -39,9 +52,16 @@ export class KratosClient {
       body: JSON.stringify({ email, password }),
     })
     if (!res.ok) throw new Error(`Falha no login: ${res.status}`)
-    const data = (await res.json()) as { token: string; userId: string }
-    this.token = data.token
-    return data
+    const data = (await res.json()) as KratosLoginResponse
+    const token = data.data?.token ?? data.token
+    const userId = data.data?.user.id ?? data.data?.user._id ?? data.userId
+
+    if (!token || !userId) {
+      throw new Error('Resposta de login invalida')
+    }
+
+    this.token = token
+    return { token, userId }
   }
 
   async submitRun(payload: SubmitRunPayload): Promise<{ id: string }> {
